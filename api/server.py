@@ -1,3 +1,4 @@
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
@@ -5,14 +6,27 @@ import json
 import re
 import difflib
 from collections import defaultdict
+import socket
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../static', template_folder='..')
 CORS(app)
+
+@app.route('/')
+def index():
+    return app.send_static_file('index.html')
 
 # Load Hadith books
 HADITH_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "deen_gpt_model", "hadith-json"))
 hadith_books = {}
 cache = defaultdict(list)
+
+def is_port_in_use(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(('0.0.0.0', port))
+            return False
+        except socket.error:
+            return True
 
 # Load JSON files into memory
 for file in os.listdir(HADITH_DIR):
@@ -152,4 +166,13 @@ def list_books():
     return jsonify({"books": list(hadith_books.keys())})
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = 5000
+    while is_port_in_use(port) and port < 5010:
+        port += 1
+    
+    if port >= 5010:
+        print("Could not find an available port between 5000 and 5009")
+        exit(1)
+        
+    print(f"Starting server on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=True)
