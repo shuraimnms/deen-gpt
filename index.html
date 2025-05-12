@@ -109,6 +109,21 @@
       background-color: #16a34a;
     }
 
+    #voiceBtn {
+      margin-left: 10px;
+      background-color: #2563eb;
+      color: white;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    #voiceBtn:hover {
+      background-color: #1d4ed8;
+    }
+
     .modal {
       display: none;
       position: fixed;
@@ -209,6 +224,7 @@
   <div id="input-area">
     <textarea id="userMessage" rows="2" placeholder="Ask something Islamic..."></textarea>
     <button id="sendBtn">Send</button>
+    <button id="voiceBtn" onclick="startVoiceRecognition()">🎤</button>
   </div>
 
   <div id="infoModal" class="modal">
@@ -285,6 +301,41 @@
         modeButton.textContent = '🌑'; // Change to dark mode icon
       } else {
         modeButton.textContent = '🌙'; // Change to light mode icon
+      }
+    }
+
+    // Voice Input Integration
+    let recognition;
+    if ('webkitSpeechRecognition' in window) {
+      recognition = new webkitSpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = function() {
+        console.log('Voice recognition started');
+      };
+
+      recognition.onerror = function(event) {
+        console.log('Voice recognition error: ' + event.error);
+      };
+
+      recognition.onend = function() {
+        console.log('Voice recognition ended');
+      };
+
+      recognition.onresult = function(event) {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById("userMessage").value = transcript;
+        sendMessage();
+      };
+    }
+
+    function startVoiceRecognition() {
+      if (recognition) {
+        recognition.start();
+      } else {
+        alert('Voice recognition is not supported in this browser.');
       }
     }
   </script>
