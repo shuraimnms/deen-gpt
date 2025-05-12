@@ -1,0 +1,17 @@
+{
+  "category": "Prayer",
+  "duas": [
+    {
+      "title": "Dua for Guidance",
+      "arabic": "اللَّهُمَّ اهْدِنِي وَسَدِّدْنِي",
+      "translation": "O Allah, guide me and make me steadfast.",
+      "reference": "Sahih Muslim"
+    },
+    {
+      "title": "Dua Before Salah",
+      "arabic": "وَجَّهْتُ وَجْهِيَ لِلَّذِي فَطَرَ السَّمَاوَاتِ وَالْأَرْضَ",
+      "translation": "I have turned my face towards the One who created the heavens and the earth.",
+      "reference": "Sahih Muslim"
+    }
+  ]
+}

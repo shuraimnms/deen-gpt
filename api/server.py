@@ -65,6 +65,10 @@ def extract_book_and_id(text):
     match = re.search(r"(bukhari|muslim|tirmidhi|nasai|abudawood|ibnmajah|ahmad)[^\d]*(\d+)", text, re.IGNORECASE)
     return (match.group(1).lower(), int(match.group(2))) if match else (None, None)
 
+def extract_book_name(text):
+    match = re.search(r"(bukhari|muslim|tirmidhi|nasai|abudawood|ibnmajah|ahmad)", text, re.IGNORECASE)
+    return match.group(1).lower() if match else None
+
 def search_by_id(book, hadith_id):
     for h in hadith_books.get(book, []):
         if h.get("id") == hadith_id or h.get("idInBook") == hadith_id:
@@ -76,6 +80,18 @@ def search_by_id(book, hadith_id):
                 "english": f"{eng.get('narrator', '')} {eng.get('text', '')}".strip()
             }
     return None
+
+def search_by_book(book_name, count=5):
+    results = []
+    for h in hadith_books.get(book_name, [])[:count]:
+        eng = h.get("english", {})
+        results.append({
+            "id": h.get("id"),
+            "book": book_name.title(),
+            "arabic": h.get("arabic", "").strip(),
+            "english": f"{eng.get('narrator', '')} {eng.get('text', '')}".strip()
+        })
+    return results
 
 def search_keywords(text):
     text = normalize(text)
@@ -132,6 +148,14 @@ def chat():
         if convo:
             return jsonify({"response": convo})
 
+        book_name = extract_book_name(msg)
+        if book_name:
+            # Searching for Hadiths from the specified book
+            hadiths = search_by_book(book_name)
+            if hadiths:
+                response = "\n\n---\n\n".join([f"📖 **{h['book']}** | Hadith #{h['id']}\n🕋 **Arabic:** {h['arabic']}\n📚 **English:** {h['english']}" for h in hadiths])
+                return jsonify({"response": response})
+
         book, hadith_id = extract_book_and_id(msg)
         if book and hadith_id:
             h = search_by_id(book, hadith_id)
@@ -144,18 +168,12 @@ def chat():
 
         matches = search_keywords(msg)
         if matches:
-            response = "\n\n---\n\n".join([
-                f"📖 **{m['book']}** | Hadith #{m['id']}\n🕋 **Arabic:** {m['arabic']}\n📚 **English:** {m['english']}"
-                for m in matches
-            ])
+            response = "\n\n---\n\n".join([f"📖 **{m['book']}** | Hadith #{m['id']}\n🕋 **Arabic:** {m['arabic']}\n📚 **English:** {m['english']}" for m in matches])
             return jsonify({"response": response})
 
         quran_results = search_quran(msg)
         if quran_results:
-            quran_reply = "\n\n".join([
-                f"📖 **Surah {v['surah']} : Ayah {v['ayah']}**\n🕋 **Arabic:** {v['arabic']}\n📚 **Translation:** {v['translation']}"
-                for v in quran_results
-            ])
+            quran_reply = "\n\n".join([f"📖 **Surah {v['surah']} : Ayah {v['ayah']}**\n🕋 **Arabic:** {v['arabic']}\n📚 **Translation:** {v['translation']}" for v in quran_results])
             return jsonify({"response": quran_reply})
 
         return jsonify({"response": "❌ No relevant Hadith or Quran verse found."})

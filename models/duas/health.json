@@ -1,0 +1,17 @@
+{
+  "category": "Health",
+  "duas": [
+    {
+      "title": "Dua for Healing",
+      "arabic": "اللَّهُمَّ اشْفِني",
+      "translation": "O Allah, heal me.",
+      "reference": "Sahih al-Bukhari"
+    },
+    {
+      "title": "Dua for Sick Person",
+      "arabic": "أَذْهِبِ الْبَأْسَ رَبَّ النَّاسِ، اشْفِ وَأَنْتَ الشَّافِي، لا شِفَاءَ إِلَّا شِفَاؤُكَ، شِفَاءً لا يُغَادِرُ سَقَمًا",
+      "translation": "Remove the affliction, O Lord of mankind, and heal. You are the Healer. There is no healing but Yours, a healing that leaves no illness behind.",
+      "reference": "Sahih Muslim"
+    }
+  ]
+}
