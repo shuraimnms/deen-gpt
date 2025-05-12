@@ -1,256 +1,253 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import os, json, re, difflib, socket
-import requests  # Import requests library
-from collections import defaultdict
+import os
+import json
+import re
+import difflib
+from googletrans import Translator
 
-app = Flask(__name__, static_folder='../static', template_folder='..')
+# Initialize Flask app
+app = Flask(__name__)
 CORS(app)
 
-@app.route('/')
-def index():
-    return app.send_static_file('index.html')
+# 📁 Load only Sahih Bukhari Hadiths
+HADITH_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "deen_gpt_model", "hadith-json", "bukhari.json"))
+with open(HADITH_FILE, "r", encoding="utf-8") as f:
+    hadith_data = json.load(f)
+bukhari_hadiths = hadith_data.get("hadiths", [])
 
-# Paths
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-HADITH_DIR = os.path.join(BASE_DIR, "models", "deen_gpt_model", "hadith-json")
-
-# Load Data
-hadith_books = {}
-cache = defaultdict(list)
-
-# Synonyms map
-synonyms = {
-    "prophet": "messenger",
-    "messenger": "prophet",
-    "salat": "namaz",
-    "namaz": "salat",
-    "duaa": "dua",
-    "dua": "duaa",
-    "zakat": "charity",
-    "charity": "zakat",
-    "fasting": "sawm",
-    "sawm": "fasting",
-    "allah": "god",
-    "god": "allah",
-}
-
-# Load Hadith
-for file in os.listdir(HADITH_DIR):
-    if file.endswith(".json"):
-        book_name = file.replace(".json", "").lower()
-        with open(os.path.join(HADITH_DIR, file), "r", encoding="utf-8") as f:
-            hadith_books[book_name] = json.load(f).get("hadiths", [])
-
-# Conversational Responses
+# 📚 Predefined chatbot replies
 convo_replies = {
     "assalamu alaikum": "Wa Alaikumussalam wa Rahmatullah! 🌙",
-    "assalamualaikum": "Wa Alaikumussalam wa Rahmatullah!",
-    "salaam": "Wa Alaikumussalam!",
-    "walaikum salam": "Wa Alaikumussalam! 😊 Anything else I can assist you with?",
-    "how are you": "Alhamdulillah, I am good! How about you? 😊",
-    "khairiyyath": "Alhamdulillah! Sab khair hai. Aap kaise ho?",
-    "jazakallah": "Wa iyyakum! May Allah reward you too 🤲",
-    "thanks": "You're welcome! 😊",
-    "shukran": "Afwan!",
-    "hello": "Assalamu Alaikum wa Rahmatullah!",
-    "hi": "Assalamu Alaikum!",
-    "salam": "Wa Alaikumussalam wa Rahmatullah!",
-    "asslamualikum": "Wa Alaikumussalam wa Rahmatullah!",
-    "good morning": "Good morning! May your day be filled with blessings. 🌅",
-    "good evening": "Good evening! May your evening be peaceful and full of Barakah. 🌙",
-    "good night": "Good night! May Allah protect you through the night. 🌙",
-    "what is hadith": "Hadith are the sayings, actions, and approvals of Prophet Muhammad ﷺ. Would you like to read one?",
-    "who is prophet": "Prophet Muhammad ﷺ is the final messenger of Islam. Would you like a Hadith about him?"
+  "assalamualaikum": "Wa Alaikumussalam wa Rahmatullah! 🌙",
+  "salaam": "Wa Alaikumussalam wa Rahmatullah!",
+  "kahiriyath": "alhamdulillah! How i can hep you? 😊",
+  "how are you": "Alhamdulillah, I am good! How about you? 😊",
+  "jazakallah": "Wa iyyakum! May Allah reward you too 🤲",
+  "jazakallah khair": "Wa iyyakum. May Allah bless you with khair in both worlds 🤍",
+  "alhamdulillah": "Alhamdulillah! All praise is due to Allah 🌟",
+  "subhanallah": "SubhanAllah! Glory be to Allah 🌌",
+  "mashallah": "MashaAllah! May Allah preserve it from evil 👀🤲",
+  "inshallah": "InshaAllah! If Allah wills 🕊️",
+  "astaghfirullah": "Astaghfirullah! May Allah forgive us all 🙏",
+  "ameen": "Ameen Ya Rabb! 🤲",
+  "ya allah": "Call upon Him with sincerity. He is As-Sami', the All-Hearing 🕊️",
+  "what is islam": "Islam is submission to the will of Allah, through Tawheed, Salah, Zakah, Fasting, and Hajj ☪️",
+  "who is allah": "Allah is the One and Only God, Eternal and Absolute, the Creator of all things 🌍",
+  "quran": "The Quran is the final revelation from Allah, a guidance for mankind 📖",
+  "hadith": "Hadith are the sayings, actions, and approvals of Prophet Muhammad ﷺ 🕋",
+  "prophet muhammad": "Prophet Muhammad ﷺ is the last messenger of Allah, a mercy to mankind 💖",
+  "peace be upon him": "Peace and blessings be upon him ﷺ",
+  "dua": "Make dua sincerely, and know that Allah is always near 🤲",
+  "what is dua": "Dua is a personal supplication, a direct connection with Allah 🕋",
+  "can you make dua for me": "Of course! May Allah grant you peace, mercy, and success in both worlds 🤍 Ameen!",
+  "i am sad": "Turn to Allah. Verily, in the remembrance of Allah do hearts find rest ❤️ (Qur’an 13:28)",
+  "i am happy": "Alhamdulillah! May Allah increase your joy and keep you grateful 😊",
+  "i need help": "Never lose hope in the mercy of Allah. He is always with the patient 🤲",
+  "what is iman": "Iman (faith) is to believe in Allah, His angels, books, messengers, the Last Day, and Qadr ✨",
+  "what is tawheed": "Tawheed is the belief in the Oneness of Allah – the essence of Islam ☝️",
+  "what is shirk": "Shirk is associating partners with Allah. It is the gravest sin in Islam 🚫",
+  "what is salah": "Salah is the five daily prayers – a pillar of Islam and our connection to Allah 🕌",
+  "what is zakah": "Zakah is obligatory charity – purifying your wealth and helping those in need 💰",
+  "what is fasting": "Fasting (sawm) is abstaining from food, drink, and sin from dawn to dusk in Ramadan 🌙",
+  "what is hajj": "Hajj is the pilgrimage to Makkah once in a lifetime if able – a symbol of unity and submission 🕋",
+  "ramadan": "Ramadan is the month of mercy, fasting, and getting closer to Allah 🌙",
+  "eid mubarak": "Eid Mubarak! Taqabbalallahu minna wa minkum! 🌸🎉",
+  "who created me": "Allah created you in the best form and gave you purpose 🌟 (Qur’an 95:4)",
+  "what is the purpose of life": "To worship Allah alone and live righteously (Qur’an 51:56) 🕊️",
+  "tell me hadith": "“The best among you are those who have the best manners and character.” – Prophet Muhammad ﷺ",
+  "tell me a quran verse": "“Indeed, with hardship [will be] ease.” – Qur’an 94:6 💫",
+  "how to be a good muslim": "Pray regularly, follow the Sunnah, do good deeds, and avoid sin 🌼",
+  "how to make wudu": "Wash hands, mouth, nose, face, arms, head, ears, and feet – in order 🧼🕌",
+  "how to pray": "Stand, recite Surah Fatiha, perform ruku and sujood – maintain khushu (focus) 🕋",
+  "can you teach me islam": "Yes! Ask anything. I'm here to help you learn about Islam, inshaAllah 📚",
+  "what is the meaning of bismillah": "Bismillah means 'In the name of Allah' – said before doing anything important ✨",
+  "what is halal": "Halal means permissible in Islam – including food, actions, and lifestyle ✅",
+  "what is haram": "Haram means prohibited – things that displease Allah and harm the soul ❌",
+  "what is sunnah": "Sunnah is the way of Prophet Muhammad ﷺ – his actions, words, and guidance 🕋",
+  "can non muslims become muslim": "Yes, Islam is for all humanity. Anyone can embrace Islam by declaring the Shahada ☪️",
+  "how to become muslim": "Say with sincerity: 'Ashhadu alla ilaha illallah wa ashhadu anna Muhammadan rasoolullah' ✨",
+  "i want to become muslim": "MashaAllah! May Allah guide you and bless your journey of faith 🤍",
+  "can you recite a dua": "Sure! 'رَبَّنَا آتِنَا فِي الدُّنْيَا حَسَنَةً وَفِي الآخِرَةِ حَسَنَةً وَقِنَا عَذَابَ النَّارِ' – Ameen!",
+  "i love islam": "MashaAllah! Islam is a beautiful way of life 💚",
+  "thank you": "You're welcome! May Allah bless you 🌸",
+  "shukran": "Afwan! May Allah accept from us and you 🤲",
+  "goodbye": "Ma'assalama! May Allah protect you always 🌙",
+  "see you later": "InshaAllah! Stay blessed and remember Allah 🤍",
 }
 
-def normalize(text): return text.lower().strip()
+# 🔎 Helper functions
+def normalize(text):
+    return text.lower().strip()
 
-def expand_synonyms(words):
-    expanded = set(words)
-    for w in words:
-        if w in synonyms:
-            expanded.add(synonyms[w])
-    return list(expanded)
+def fuzzy_match(query, choices):
+    return difflib.get_close_matches(query, choices, n=1, cutoff=0.6)
 
 def search_conversation(text):
     query = normalize(text)
-    match = difflib.get_close_matches(query, convo_replies.keys(), n=1, cutoff=0.6)
+    match = fuzzy_match(query, convo_replies.keys())
     return convo_replies.get(match[0]) if match else None
 
-def extract_book_and_id(text):
-    match = re.search(r"(bukhari|muslim|tirmidhi|nasai|abudawood|ibnmajah|ahmad)[^\d]*(\d+)", text, re.IGNORECASE)
-    return (match.group(1).lower(), int(match.group(2))) if match else (None, None)
+def extract_hadith_id(text):
+    match = re.search(r"(bukhari)[^\d]*(\d+)", text, re.IGNORECASE)
+    if match:
+        return int(match.group(2))
+    return None
 
-def extract_book_name(text):
-    match = re.search(r"(bukhari|muslim|tirmidhi|nasai|abudawood|ibnmajah|ahmad)", text, re.IGNORECASE)
-    return match.group(1).lower() if match else None
-
-def search_by_id(book, hadith_id):
-    for h in hadith_books.get(book, []):
+def search_by_id(hadith_id):
+    for h in bukhari_hadiths:
         if h.get("id") == hadith_id or h.get("idInBook") == hadith_id:
             eng = h.get("english", {})
             return {
                 "id": h.get("id", hadith_id),
-                "book": book.title(),
+                "book": "Bukhari",
                 "arabic": h.get("arabic", "").strip(),
                 "english": f"{eng.get('narrator', '')} {eng.get('text', '')}".strip()
             }
     return None
 
-def search_by_book(book_name, count=5):
+def search_keywords(query):
+    query = normalize(query)
+    keywords = query.split()
     results = []
-    for h in hadith_books.get(book_name, [])[:count]:
+
+    for h in bukhari_hadiths:
         eng = h.get("english", {})
-        results.append({
-            "id": h.get("id"),
-            "book": book_name.title(),
-            "arabic": h.get("arabic", "").strip(),
-            "english": f"{eng.get('narrator', '')} {eng.get('text', '')}".strip()
-        })
-    return results
+        text = f"{eng.get('narrator', '')} {eng.get('text', '')}".lower()
+        score = sum(1 for word in keywords if word in text) / len(keywords)
+        if score > 0.3:
+            results.append({
+                "id": h.get("id"),
+                "book": "Bukhari",
+                "arabic": h.get("arabic", "").strip(),
+                "english": f"{eng.get('narrator', '')} {eng.get('text', '')}".strip(),
+                "score": score
+            })
 
-def search_keywords(text, threshold=0.25):
-    text = normalize(text)
-    if text in cache: return cache[text]
+    return sorted(results, key=lambda x: -x["score"])[:5]
 
-    words = text.split()
-    words = expand_synonyms(words)
-    results = []
+def correct_spelling(user_input):
+    words = user_input.split()
+    corrected_words = []
+    for word in words:
+        corrected_word = fuzzy_match(word, ["bukhari", "hadith"])
+        corrected_words.append(corrected_word[0] if corrected_word else word)
+    return " ".join(corrected_words)
 
-    for book, entries in hadith_books.items():
-        for h in entries:
-            eng = h.get("english", {})
-            content = f"{eng.get('narrator', '')} {eng.get('text', '')}".lower()
-            score = sum(1 for k in words if k in content) / len(words)
-            if score > threshold:
-                results.append({
-                    "id": h.get("id"),
-                    "book": book.title(),
-                    "arabic": h.get("arabic", "").strip(),
-                    "english": f"{eng.get('narrator', '')} {eng.get('text', '')}".strip(),
-                    "score": round(score, 2)
-                })
-    results = sorted(results, key=lambda x: -x["score"])[:5]
-    cache[text] = results
-    return results
+# 🔎 Translate to desired language (Urdu, Hindi, Telugu, English)
+def translate_to_language(text, lang_code='ur'):
+    translator = Translator()
+    translation = translator.translate(text, src='ar', dest=lang_code)
+    return translation.text
 
-def search_quran(text):
-    query = normalize(text)
-    match = re.match(r"(\d+):(\d+)", query)
-    results = []
+# 📖 Load Quran data from JSON file
+QURAN_DATA_PATH = r'C:\Users\shura\OneDrive\Desktop\shuraim.ai\deen-gpt\models\deen_gpt_model\quran\quran.json'
 
-    # API URL for Quran
-    quran_api_url = "https://api.alquran.cloud/v1/ayah/{surah}:{ayah}/en.asad"
+def load_quran_data():
+    with open(QURAN_DATA_PATH, 'r', encoding='utf-8') as file:
+        return json.load(file)
 
-    if match:
-        surah, ayah = int(match.group(1)), int(match.group(2))
-        response = requests.get(quran_api_url.format(surah=surah, ayah=ayah))
-        if response.status_code == 200:
-            data = response.json()
-            verse = data.get("data", {})
-            return [{
-                "surah": surah,
-                "ayah": ayah,
-                "arabic": verse.get("text"),
-                "translation": verse.get("translation")
-            }]
-    else:
-        words = expand_synonyms(query.split())
-        for surah in range(1, 115):
-            for ayah in range(1, 100):  # Assumes up to 100 verses per Surah
-                response = requests.get(quran_api_url.format(surah=surah, ayah=ayah))
-                if response.status_code == 200:
-                    data = response.json()
-                    verse = data.get("data", {})
-                    translation = verse.get("translation", "").lower()
-                    if any(word in translation for word in words):
-                        results.append({
-                            "surah": surah,
-                            "ayah": ayah,
-                            "arabic": verse.get("text"),
-                            "translation": translation
-                        })
-    return results[:3]
+quran_data = load_quran_data()
 
+# 🔎 Fetch Quran verse by chapter and verse
+def fetch_quran_verse(chapter, verse, lang_code='ur'):
+    for item in quran_data.get(str(chapter), []):
+        if item["verse"] == verse:
+            arabic_text = item["text"]
+            translation = translate_to_language(arabic_text, lang_code)
+            return {"arabic": arabic_text, "translation": translation}
+    return None
+
+# 🔄 Main endpoint
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
-        msg = request.json.get("message", "").strip()
-        if not msg:
-            return jsonify({"response": "❌ Please say something."})
+        user_input = request.json.get("message", "").strip()
+        if not user_input:
+            return jsonify({"response": "❌ Please enter a message."})
 
-        convo = search_conversation(msg)
+        convo = search_conversation(user_input)
         if convo:
             return jsonify({"response": convo})
 
-        book_name = extract_book_name(msg)
-        if book_name:
-            hadiths = search_by_book(book_name)
-            if hadiths:
-                response = "\n\n---\n\n".join([ 
-                    f"📖 **{h['book']}** | Hadith #{h['id']}\n🕋 **Arabic:** {h['arabic']}\n📚 **English:** {h['english']}" 
-                    for h in hadiths
-                ])
-                return jsonify({"response": response})
+        corrected_input = correct_spelling(user_input)
+        convo = search_conversation(corrected_input)
+        if convo:
+            return jsonify({"response": convo})
 
-        book, hadith_id = extract_book_and_id(msg)
-        if book and hadith_id:
-            h = search_by_id(book, hadith_id)
-            if h:
-                return jsonify({"response": (
-                    f"📖 **{h['book']}** | Hadith #{h['id']}\n"
-                    f"🕋 **Arabic:**\n{h['arabic']}\n\n"
-                    f"📚 **English:**\n{h['english']}"
-                )})
+        hadith_id = extract_hadith_id(user_input)
+        if hadith_id:
+            hadith = search_by_id(hadith_id)
+            if hadith:
+                lang_code = 'ur'  # Default language is Urdu
+                if 'hindi' in user_input.lower():
+                    lang_code = 'hi'
+                elif 'telugu' in user_input.lower():
+                    lang_code = 'te'
+                elif 'english' in user_input.lower():
+                    lang_code = 'en'
+                elif 'urdu' in user_input.lower():
+                    lang_code = 'ur'
 
-        matches = search_keywords(msg)
-        if matches:
-            response = "\n\n---\n\n".join([ 
-                f"📖 **{m['book']}** | Hadith #{m['id']}\n🕋 **Arabic:** {m['arabic']}\n📚 **English:** {m['english']}" 
-                for m in matches
-            ])
-            return jsonify({"response": response})
+                translation = translate_to_language(hadith["english"], lang_code)
+                return jsonify({
+                    "response": f"📖 **{hadith['book']}** | Hadith #{hadith['id']}\n"
+                                f"-----------------------------------------\n"
+                                f"🕋 **Arabic:**\n{hadith['arabic']}\n"
+                                f"-----------------------------------------\n"  # Line added here
+                                f"📚 **English:**\n{hadith['english']}\n\n"
+                                f"🌙 **{lang_code.upper()} Translation:**\n{translation}"
+                })
 
-        quran_results = search_quran(msg)
-        if quran_results:
-            quran_reply = "\n\n".join([ 
-                f"📖 **Surah {v['surah']} : Ayah {v['ayah']}**\n🕋 **Arabic:** {v['arabic']}\n📚 **Translation:** {v['translation']}" 
-                for v in quran_results
-            ])
-            return jsonify({"response": quran_reply})
+            return jsonify({"response": f"❌ Hadith #{hadith_id} not found in Bukhari."})
 
-        return jsonify({"response": "❌ No relevant Hadith or Quran verse found."})
+        match = re.search(r"(surah|sura)\s*(\d+)\s*(ayah|verse)\s*(\d+)", user_input, re.IGNORECASE)
+        if match:
+            surah_number = int(match.group(2))
+            ayah_number = int(match.group(4))
+            lang_code = 'ur'  # Default language is Urdu
+
+            if 'hindi' in user_input.lower():
+                lang_code = 'hi'
+            elif 'telugu' in user_input.lower():
+                lang_code = 'te'
+            elif 'english' in user_input.lower():
+                lang_code = 'en'
+            elif 'urdu' in user_input.lower():
+                lang_code = 'ur'
+
+            # Translate to the correct language
+            quran_verse = fetch_quran_verse(surah_number, ayah_number, lang_code)
+            if quran_verse:
+                return jsonify({
+                    "response": f"📖 **Quran - Surah {surah_number}, Ayah {ayah_number}**\n"
+                                f"-----------------------------------------\n"
+                                f"🕋 **Arabic:**\n{quran_verse['arabic']}\n"
+                                f"-----------------------------------------\n"  # Line added here
+                                f"📚 **Translation ({lang_code.upper()}):**\n{quran_verse['translation']}"
+                })
+            return jsonify({"response": f"❌ Quran verse not found for Surah {surah_number} Ayah {ayah_number}."})
+
+        matches = search_keywords(user_input)
+        if not matches:
+            return jsonify({"response": "❌ No relevant Hadith found in Bukhari."})
+
+        response_blocks = []
+        for res in matches:
+            response_blocks.append(
+                f"📖 **{res['book']}** | Hadith #{res['id']}\n"
+                f"-----------------------------------------\n"
+                f"🕋 **Arabic:**\n{res['arabic'] or 'N/A'}\n"
+                f"-----------------------------------------\n"  # Line added here
+                f"📚 **English:**\n{res['english'] or 'N/A'}"
+            )
+
+        return jsonify({"response": "\n\n============================\n\n".join(response_blocks)})
+
     except Exception as e:
-        print("Server Error:", e)
-        return jsonify({"response": "❌ Server Error"}), 500
+        print("❌ Server Error:", e)
+        return jsonify({"response": "❌ Server error. Please try again."}), 500
 
-@app.route("/search", methods=["GET"])
-def search_api():
-    query = request.args.get("q", "")
-    if not query:
-        return jsonify({"error": "Missing 'q' parameter"}), 400
-    results = search_keywords(query)
-    return jsonify({"query": query, "results": results})
-
-@app.route("/books", methods=["GET"])
-def list_books():
-    return jsonify({"books": list(hadith_books.keys())})
-
-def is_port_in_use(port):
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.bind(('0.0.0.0', port))
-            return False
-        except socket.error:
-            return True
-
+# ▶️ Run the app
 if __name__ == "__main__":
-    port = 5000
-    while is_port_in_use(port) and port < 5010:
-        port += 1
-    if port >= 5010:
-        print("❌ No available port.")
-        exit(1)
-    print(f"✅ Running on http://0.0.0.0:{port}")
-    app.run(host="0.0.0.0", port=port)
+    app.run(debug=True)

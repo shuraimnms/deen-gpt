@@ -208,6 +208,39 @@
       color: #333;
     }
 
+    /* Suggestions Box */
+    #suggestionsBox {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 10px;
+      background-color: #0f172a;
+      border: 1px solid #334155;
+      margin: 20px auto;
+      max-width: 80%;
+      border-radius: 8px;
+      justify-content: center;
+    }
+
+    .suggestion {
+      background-color: #2563eb;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 1rem;
+      text-align: center;
+    }
+
+    .suggestion:hover {
+      background-color: #1d4ed8;
+    }
+
+    /* Typing Indicator */
+    #typingIndicator {
+      font-style: italic;
+      opacity: 0.7;
+    }
   </style>
 </head>
 <body>
@@ -218,6 +251,15 @@
       <button class="mode-btn" onclick="toggleMode()">🌙</button>
     </div>
   </header>
+
+  <div id="suggestionsBox">
+    <div class="suggestion" onclick="selectSuggestion('Assalamualaikum')">Assalamualaikum</div>
+    <div class="suggestion" onclick="selectSuggestion('Hadith Bukhari 6 in Urdu')">Hadith Bukhari 6 in Urdu</div>
+    <div class="suggestion" onclick="selectSuggestion('Surah 15 Ayah 3 in Hindi')">Surah 1 Ayah 3 in Hindi</div>
+    <div class="suggestion" onclick="selectSuggestion('what is Ramadan')">what is Ramadan</div>
+    <div class="suggestion" onclick="selectSuggestion('What is Hajj?')">What is Hajj?</div>
+    <div class="suggestion" onclick="selectSuggestion('Surah 15 Ayah 3 in telugu')">Surah 1 Ayah 3 in telugu</div>
+  </div>
 
   <div id="chat-container"></div>
 
@@ -263,31 +305,76 @@
       }
     }
 
+    function showTypingIndicator() {
+      const chatContainer = document.getElementById("chat-container");
+      const typingIndicator = document.createElement("div");
+      typingIndicator.id = "typingIndicator";
+      typingIndicator.classList.add("message", "bot");
+      typingIndicator.textContent = "Typing...";
+      chatContainer.appendChild(typingIndicator);
+      typingIndicator.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+
+    function hideTypingIndicator() {
+      const typingIndicator = document.getElementById("typingIndicator");
+      if (typingIndicator) {
+        typingIndicator.remove();
+      }
+    }
+
     function sendMessage() {
       const userMessage = document.getElementById("userMessage").value.trim();
       if (userMessage) {
         addMessage(userMessage, "user", true);
         document.getElementById("userMessage").value = "";
 
+        // Hide suggestions whenever a message is sent
+        hideSuggestionsBox();
+
+        // Show typing indicator
+        showTypingIndicator();
+
         fetch("http://127.0.0.1:5000/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: userMessage })
         })
-        .then(response => response.json())
-        .then(data => {
-          const botResponse = data.response;
-          addMessage(botResponse, "bot", false);
-        })
-        .catch(error => {
-          console.error("Error:", error);
-          addMessage("❌ Error connecting to the server. Please try again.", "bot", false);
-        });
+          .then(response => response.json())
+          .then(data => {
+            hideTypingIndicator();
+            const botResponse = data.response;
+            addMessage(botResponse, "bot", false);
+          })
+          .catch(error => {
+            hideTypingIndicator();
+            console.error("Error:", error);
+            addMessage("❌ Error connecting to the server. Please try again.", "bot", false);
+          });
+      }
+    }
+
+    function selectSuggestion(suggestion) {
+      document.getElementById("userMessage").value = suggestion;
+      sendMessage(); // This will call sendMessage() which hides the box
+    }
+
+    // Show suggestions only at the start
+    window.onload = function () {
+      const suggestionsBox = document.getElementById("suggestionsBox");
+      if (suggestionsBox) {
+        suggestionsBox.style.display = "flex"; // Show the suggestion box initially
+      }
+    };
+
+    function hideSuggestionsBox() {
+      const box = document.getElementById("suggestionsBox");
+      if (box) {
+        box.style.display = "none";
       }
     }
 
     document.getElementById("sendBtn").addEventListener("click", sendMessage);
-    document.getElementById("userMessage").addEventListener("keydown", function(event) {
+    document.getElementById("userMessage").addEventListener("keydown", function (event) {
       if (event.key === "Enter") {
         event.preventDefault();
         sendMessage();
