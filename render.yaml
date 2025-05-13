@@ -1,8 +1,14 @@
 services:
   - type: web
-    name: deen-gpt-backend
+    name: deen-gpt
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn api.server:app --bind 0.0.0.0:$PORT
+    buildCommand: |
+      pip install -r requirements.txt
+    startCommand: waitress-serve --listen=0.0.0.0:$PORT api.server:app
+    # Ensure you replace `api.server:app` with the actual path where your app instance is located
+    # $PORT is automatically set by Render for port binding
     plan: free
-    autoDeploy: true
+    # Optional: Add custom environment variables if needed
+    envVars:
+      - key: FLASK_ENV
+        value: production
