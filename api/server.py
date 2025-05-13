@@ -6,22 +6,25 @@ import re
 import difflib
 from googletrans import Translator
 
-# Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 
 # 📁 Load only Sahih Bukhari Hadiths
 HADITH_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "models", "deen_gpt_model", "hadith-json", "bukhari.json"))
-with open(HADITH_FILE, "r", encoding="utf-8") as f:
-    hadith_data = json.load(f)
-bukhari_hadiths = hadith_data.get("hadiths", [])
+try:
+    with open(HADITH_FILE, "r", encoding="utf-8") as f:
+        hadith_data = json.load(f)
+    bukhari_hadiths = hadith_data.get("hadiths", [])
+except Exception as e:
+    print(f"Error loading Hadith file: {e}")
+    bukhari_hadiths = []
 
 # 📚 Predefined chatbot replies
 convo_replies = {
     "assalamu alaikum": "Wa Alaikumussalam wa Rahmatullah! 🌙",
-  "assalamualaikum": "Wa Alaikumussalam wa Rahmatullah! 🌙",
-  "salaam": "Wa Alaikumussalam wa Rahmatullah!",
-  "kahiriyath": "alhamdulillah! How i can hep you? 😊",
+    "assalamualaikum": "Wa Alaikumussalam wa Rahmatullah! 🌙",
+    "salaam": "Wa Alaikumussalam wa Rahmatullah!",
+    "kahiriyath": "alhamdulillah! How i can hep you? 😊",
   "how are you": "Alhamdulillah, I am good! How about you? 😊",
   "jazakallah": "Wa iyyakum! May Allah reward you too 🤲",
   "jazakallah khair": "Wa iyyakum. May Allah bless you with khair in both worlds 🤍",
@@ -89,10 +92,9 @@ def search_conversation(text):
     return convo_replies.get(match[0]) if match else None
 
 def extract_hadith_id(text):
-    match = re.search(r"(bukhari)[^\d]*(\d+)", text, re.IGNORECASE)
-    if match:
-        return int(match.group(2))
-    return None
+    corrected_text = correct_spelling(text)
+    match = re.search(r"(bukhari)[^\d]*(\d+)", corrected_text, re.IGNORECASE)
+    return int(match.group(2)) if match else None
 
 def search_by_id(hadith_id):
     for h in bukhari_hadiths:
@@ -107,7 +109,7 @@ def search_by_id(hadith_id):
     return None
 
 def search_keywords(query):
-    query = normalize(query)
+    query = normalize(correct_spelling(query))
     keywords = query.split()
     results = []
 
@@ -127,38 +129,51 @@ def search_keywords(query):
     return sorted(results, key=lambda x: -x["score"])[:5]
 
 def correct_spelling(user_input):
-    words = user_input.split()
+    words = re.findall(r'\w+', user_input.lower())  # Split ignoring symbols
     corrected_words = []
+    vocab = ["bukhari", "hadith","buqari", "sahih", "buqari", "bukari", "bukhaari", "hadess", "hadees", "hadeeth"]
+
     for word in words:
-        corrected_word = fuzzy_match(word, ["bukhari", "hadith"])
-        corrected_words.append(corrected_word[0] if corrected_word else word)
+        corrected = fuzzy_match(word, vocab)
+        corrected_words.append(corrected[0] if corrected else word)
+
     return " ".join(corrected_words)
 
-# 🔎 Translate to desired language (Urdu, Hindi, Telugu, English)
+# 🌐 Translate using Google Translator
 def translate_to_language(text, lang_code='ur'):
-    translator = Translator()
-    translation = translator.translate(text, src='ar', dest=lang_code)
-    return translation.text
+    try:
+        translator = Translator()
+        translated = translator.translate(text, src='ar', dest=lang_code)
+        return translated.text
+    except Exception as e:
+        print(f"Translation error: {e}")
+        return text  # fallback
 
 # 📖 Load Quran data from JSON file
-QURAN_DATA_PATH = r'C:\Users\shura\OneDrive\Desktop\shuraim.ai\deen-gpt\models\deen_gpt_model\quran\quran.json'
+QURAN_DATA_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "models", "deen_gpt_model", "quran", "quran.json")
+)
 
 def load_quran_data():
-    with open(QURAN_DATA_PATH, 'r', encoding='utf-8') as file:
-        return json.load(file)
+    try:
+        with open(QURAN_DATA_PATH, 'r', encoding='utf-8') as file:
+            return json.load(file)
+    except Exception as e:
+        print(f"Quran file loading error: {e}")
+        return {}
 
 quran_data = load_quran_data()
 
-# 🔎 Fetch Quran verse by chapter and verse
 def fetch_quran_verse(chapter, verse, lang_code='ur'):
-    for item in quran_data.get(str(chapter), []):
-        if item["verse"] == verse:
-            arabic_text = item["text"]
-            translation = translate_to_language(arabic_text, lang_code)
-            return {"arabic": arabic_text, "translation": translation}
+    chapter_data = quran_data.get(str(chapter), [])
+    for item in chapter_data:
+        if item.get("verse") == verse:
+            arabic = item.get("text", "")
+            translated = translate_to_language(arabic, lang_code)
+            return {"arabic": arabic, "translation": translated}
     return None
 
-# 🔄 Main endpoint
+# 🔄 Main chat endpoint
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
@@ -166,83 +181,86 @@ def chat():
         if not user_input:
             return jsonify({"response": "❌ Please enter a message."})
 
+        # Step 1: Simple greetings
         convo = search_conversation(user_input)
         if convo:
             return jsonify({"response": convo})
 
+        # Step 2: Spell-corrected greetings
         corrected_input = correct_spelling(user_input)
         convo = search_conversation(corrected_input)
         if convo:
             return jsonify({"response": convo})
 
+        # Step 3: Hadith ID (even from incorrect spellings)
         hadith_id = extract_hadith_id(user_input)
         if hadith_id:
             hadith = search_by_id(hadith_id)
             if hadith:
-                lang_code = 'ur'  # Default language is Urdu
-                if 'hindi' in user_input.lower():
-                    lang_code = 'hi'
-                elif 'telugu' in user_input.lower():
-                    lang_code = 'te'
-                elif 'english' in user_input.lower():
-                    lang_code = 'en'
-                elif 'urdu' in user_input.lower():
-                    lang_code = 'ur'
+                lang = "ur"
+                user_lower = user_input.lower()
+                if 'hindi' in user_lower:
+                    lang = "hi"
+                elif 'telugu' in user_lower:
+                    lang = "te"
+                elif 'english' in user_lower:
+                    lang = "en"
+                elif 'urdu' in user_lower:
+                    lang = "ur"
 
-                translation = translate_to_language(hadith["english"], lang_code)
+                translated = translate_to_language(hadith["english"], lang)
                 return jsonify({
                     "response": f"📖 **{hadith['book']}** | Hadith #{hadith['id']}\n"
                                 f"-----------------------------------------\n"
                                 f"🕋 **Arabic:**\n{hadith['arabic']}\n"
-                                f"-----------------------------------------\n"  # Line added here
+                                f"-----------------------------------------\n"
                                 f"📚 **English:**\n{hadith['english']}\n\n"
-                                f"🌙 **{lang_code.upper()} Translation:**\n{translation}"
+                                f"🌙 **{lang.upper()} Translation:**\n{translated}"
                 })
-
             return jsonify({"response": f"❌ Hadith #{hadith_id} not found in Bukhari."})
 
+        # Step 4: Quran verse by surah/ayah
         match = re.search(r"(surah|sura)\s*(\d+)\s*(ayah|verse)\s*(\d+)", user_input, re.IGNORECASE)
         if match:
-            surah_number = int(match.group(2))
-            ayah_number = int(match.group(4))
-            lang_code = 'ur'  # Default language is Urdu
+            surah = int(match.group(2))
+            ayah = int(match.group(4))
+            lang = "ur"
+            lower = user_input.lower()
+            if 'hindi' in lower:
+                lang = "hi"
+            elif 'telugu' in lower:
+                lang = "te"
+            elif 'english' in lower:
+                lang = "en"
+            elif 'urdu' in lower:
+                lang = "ur"
 
-            if 'hindi' in user_input.lower():
-                lang_code = 'hi'
-            elif 'telugu' in user_input.lower():
-                lang_code = 'te'
-            elif 'english' in user_input.lower():
-                lang_code = 'en'
-            elif 'urdu' in user_input.lower():
-                lang_code = 'ur'
-
-            # Translate to the correct language
-            quran_verse = fetch_quran_verse(surah_number, ayah_number, lang_code)
-            if quran_verse:
+            verse = fetch_quran_verse(surah, ayah, lang)
+            if verse:
                 return jsonify({
-                    "response": f"📖 **Quran - Surah {surah_number}, Ayah {ayah_number}**\n"
+                    "response": f"📖 **Quran - Surah {surah}, Ayah {ayah}**\n"
                                 f"-----------------------------------------\n"
-                                f"🕋 **Arabic:**\n{quran_verse['arabic']}\n"
-                                f"-----------------------------------------\n"  # Line added here
-                                f"📚 **Translation ({lang_code.upper()}):**\n{quran_verse['translation']}"
+                                f"🕋 **Arabic:**\n{verse['arabic']}\n"
+                                f"-----------------------------------------\n"
+                                f"📚 **Translation ({lang.upper()}):**\n{verse['translation']}"
                 })
-            return jsonify({"response": f"❌ Quran verse not found for Surah {surah_number} Ayah {ayah_number}."})
+            return jsonify({"response": f"❌ Quran verse not found for Surah {surah} Ayah {ayah}."})
 
+        # Step 5: Keyword-based hadith search
         matches = search_keywords(user_input)
         if not matches:
             return jsonify({"response": "❌ No relevant Hadith found in Bukhari."})
 
-        response_blocks = []
-        for res in matches:
-            response_blocks.append(
-                f"📖 **{res['book']}** | Hadith #{res['id']}\n"
+        blocks = []
+        for m in matches:
+            blocks.append(
+                f"📖 **{m['book']}** | Hadith #{m['id']}\n"
                 f"-----------------------------------------\n"
-                f"🕋 **Arabic:**\n{res['arabic'] or 'N/A'}\n"
-                f"-----------------------------------------\n"  # Line added here
-                f"📚 **English:**\n{res['english'] or 'N/A'}"
+                f"🕋 **Arabic:**\n{m['arabic'] or 'N/A'}\n"
+                f"-----------------------------------------\n"
+                f"📚 **English:**\n{m['english'] or 'N/A'}"
             )
-
-        return jsonify({"response": "\n\n============================\n\n".join(response_blocks)})
+        return jsonify({"response": "\n\n============================\n\n".join(blocks)})
 
     except Exception as e:
         print("❌ Server Error:", e)
