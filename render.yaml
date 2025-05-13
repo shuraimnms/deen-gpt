@@ -5,7 +5,8 @@ services:
     region: oregon  # or use frankfurt/dublin depending on your location
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn api.server:app
+    startCommand: gunicorn app:app
+
     envVars:
       - key: PYTHON_VERSION
         value: 3.10
