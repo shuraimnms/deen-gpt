@@ -1,7 +1,0 @@
-cd "C:\Users\shura\OneDrive\Desktop\shuraim.ai\deen-gpt"
-git init
-git remote add origin https://github.com/shuraimnms/deen-gpt.git
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git push -u origin main
