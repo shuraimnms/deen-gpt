@@ -3,6 +3,6 @@ services:
     name: deen-gpt-backend
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn api.server:app
+    startCommand: gunicorn api.server:app --bind 0.0.0.0:$PORT
     plan: free
     autoDeploy: true
