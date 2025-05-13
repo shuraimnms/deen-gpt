@@ -127,9 +127,9 @@ def search_keywords(query):
     return sorted(results, key=lambda x: -x["score"])[:5]
 
 def correct_spelling(user_input):
-    words = re.findall(r'\w+', user_input.lower())  # Split ignoring symbols
+    words = re.findall(r'\w+', user_input.lower())
     corrected_words = []
-    vocab = ["bukhari", "hadith","buqari", "sahih", "buqari", "bukari", "bukhaari", "hadess", "hadees", "hadeeth"]
+    vocab = ["bukhari", "hadith", "buqari", "sahih", "bukari", "bukhaari", "hadess", "hadees", "hadeeth"]
 
     for word in words:
         corrected = fuzzy_match(word, vocab)
@@ -145,7 +145,7 @@ def translate_to_language(text, lang_code='ur'):
         return translated.text
     except Exception as e:
         print(f"Translation error: {e}")
-        return text  # fallback
+        return text
 
 # 📖 Load Quran data from JSON file
 QURAN_DATA_PATH = os.path.abspath(
@@ -171,6 +171,11 @@ def fetch_quran_verse(chapter, verse, lang_code='ur'):
             return {"arabic": arabic, "translation": translated}
     return None
 
+# ✅ Root route for testing
+@app.route("/", methods=["GET"])
+def root():
+    return jsonify({"message": "✅ DeenGPT Backend is running!"})
+
 # 🔄 Main chat endpoint
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -190,7 +195,7 @@ def chat():
         if convo:
             return jsonify({"response": convo})
 
-        # Step 3: Hadith ID (even from incorrect spellings)
+        # Step 3: Hadith ID
         hadith_id = extract_hadith_id(user_input)
         if hadith_id:
             hadith = search_by_id(hadith_id)
@@ -217,7 +222,7 @@ def chat():
                 })
             return jsonify({"response": f"❌ Hadith #{hadith_id} not found in Bukhari."})
 
-        # Step 4: Quran verse by surah/ayah
+        # Step 4: Quran verse
         match = re.search(r"(surah|sura)\s*(\d+)\s*(ayah|verse)\s*(\d+)", user_input, re.IGNORECASE)
         if match:
             surah = int(match.group(2))
