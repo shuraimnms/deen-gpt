@@ -65,7 +65,6 @@ convo_replies = {
   "can you teach me islam": "Yes! Ask anything. I'm here to help you learn about Islam, inshaAllah 📚",
   "what is the meaning of bismillah": "Bismillah means 'In the name of Allah' – said before doing anything important ✨",
   "what is halal": "Halal means permissible in Islam – including food, actions, and lifestyle ✅",
-  "what is haram": "Haram means prohibited – things that displease Allah and harm the soul ❌",
   "what is sunnah": "Sunnah is the way of Prophet Muhammad ﷺ – his actions, words, and guidance 🕋",
   "can non muslims become muslim": "Yes, Islam is for all humanity. Anyone can embrace Islam by declaring the Shahada ☪️",
   "how to become muslim": "Say with sincerity: 'Ashhadu alla ilaha illallah wa ashhadu anna Muhammadan rasoolullah' ✨",
