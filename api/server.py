@@ -47,7 +47,6 @@ convo_replies = {
   "i am sad": "Turn to Allah. Verily, in the remembrance of Allah do hearts find rest ❤️ (Qur’an 13:28)",
   "i am happy": "Alhamdulillah! May Allah increase your joy and keep you grateful 😊",
   "i need help": "Never lose hope in the mercy of Allah. He is always with the patient 🤲",
-  "what is iman": "Iman (faith) is to believe in Allah, His angels, books, messengers, the Last Day, and Qadr ✨",
   "what is tawheed": "Tawheed is the belief in the Oneness of Allah – the essence of Islam ☝️",
   "what is shirk": "Shirk is associating partners with Allah. It is the gravest sin in Islam 🚫",
   "what is salah": "Salah is the five daily prayers – a pillar of Islam and our connection to Allah 🕌",
